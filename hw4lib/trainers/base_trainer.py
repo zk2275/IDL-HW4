@@ -135,7 +135,7 @@ class BaseTrainer(ABC):
         shutil.copy2(config_file, expt_root / "config.yaml")
 
         # Save model architecture with torchinfo summary
-        with open(expt_root / "model_arch.txt", "w", encoding='utf-8') as f:
+        with open(expt_root / "model_arch.txt", "w") as f:
             # Get a sample input shape from your model's expected input
             if isinstance(self.model, DecoderOnlyTransformer):
                 batch_size = self.config['data'].get('batch_size', 8)
@@ -149,7 +149,6 @@ class BaseTrainer(ABC):
                     dtypes=dtypes
                 )
                 # Write the summary string to file
-                # change118
                 f.write(str(model_summary))
             elif isinstance(self.model, EncoderDecoderTransformer):
                 batch_size = self.config['data'].get('batch_size', 8)

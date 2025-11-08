@@ -74,7 +74,7 @@ class MultiHeadAttention:
 
         # Merge the masks
         # (N, S) + (L, S) -> (N, H, L, S)
-        mask = self._merge_masks(key_padding_mask, attn_mask) if (key_padding_mask is not None or attn_mask is not None) else None
+        mask = self._merge_masks(key_padding_mask, attn_mask)
 
         # Apply the attention mechanism
         # (N, num_heads, L, embed_dim // num_heads)
@@ -82,11 +82,11 @@ class MultiHeadAttention:
 
         # Merge the attention outputs   
         # (N, num_heads, L, embed_dim // num_heads) -> (N, L, embed_dim)
-        attn_output = self._concat_heads(attn_outputs) 
+        attn_output = self._concat_heads(attn_outputs)
 
         # Project the attention outputs
         # (N, L, embed_dim) -> (N, L, embed_dim)
-        output = self.out_proj.forward(attn_output) 
+        output = self.out_proj.forward(attn_output)
 
         # Return output
         return output
@@ -140,13 +140,13 @@ class MultiHeadAttention:
         # TODO: Implement merge masks
 
         # Expand key_padding_mask to (N, 1, 1, S) and broadcast to (N, H, L, S)
-        key_mask = key_padding_mask[:, None, None, :]
+        key_mask = np.expand_dims(key_padding_mask, axis=(1, 2))
         
         # Expand attn_mask to (1, 1, L, S) and broadcast to (N, H, L, S)
-        attention_mask = attn_mask[None, None, :, :]
+        attention_mask = np.expand_dims(attn_mask, axis=(0, 1))
         
         # Combine masks using logical_or - if either mask is True, we want to mask that position
-        combined_mask = key_mask | attention_mask
+        combined_mask = np.logical_or(key_mask, attention_mask)
         
         # Return combined mask
         return combined_mask
@@ -159,13 +159,12 @@ class MultiHeadAttention:
         :return: (N, num_heads, L, embed_dim // num_heads)
         """
         # TODO: Implement split heads
-        N, L, embed_size = x.shape
 
         # Reshape: (N, L, embed_dim) -> (N, L, num_heads, embed_dim // num_heads)
-        x = x.reshape(N, L, self.num_heads, self.embed_dim // self.num_heads)
+        x = x.reshape(self.N, self.L, self.num_heads, -1)
         
         # Transpose: (N, L, num_heads, embed_dim // num_heads) -> (N, num_heads, L, embed_dim // num_heads)
-        x = x.transpose(0,2,1,3)
+        x = np.transpose(x, (0, 2, 1, 3))
         
         # Return x
         return x
@@ -178,13 +177,11 @@ class MultiHeadAttention:
         :return: (N, L, embed_dim)
         """
         # TODO: Implement concat heads
-        N, num_heads, L, ed_over_nh = x.shape
-
         # Transpose: (N, num_heads, L, embed_dim // num_heads) -> (N, L, num_heads, embed_dim // num_heads)
-        x = x.transpose(0, 2, 1, 3)
+        x = np.transpose(x, (0, 2, 1, 3))
         
         # Reshape: (N, L, num_heads, embed_dim // num_heads) -> (N, L, embed_dim)
-        x = x.reshape(N, L, self.embed_dim)
+        x = x.reshape(self.N, self.L, self.embed_dim)
         
         # Return x
         return x

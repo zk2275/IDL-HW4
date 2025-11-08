@@ -23,10 +23,8 @@ class Softmax:
         # TODO: Implement forward pass
         # Compute the softmax in a numerically stable way
         # Apply it to the dimension specified by the `dim` parameter
-        exp_Z = np.exp(Z - np.max(Z, axis= self.dim, keepdims=True))  
-
-        self.A =  exp_Z / np.sum(exp_Z, axis= self.dim, keepdims=True) 
-        
+        Z_exp = np.exp(Z - np.max(Z, axis=self.dim, keepdims=True))
+        self.A = Z_exp / np.sum(Z_exp, axis=self.dim, keepdims=True)
         return self.A
 
     def backward(self, dLdA):
@@ -43,29 +41,18 @@ class Softmax:
            
         # Reshape input to 2D
         if len(shape) > 2:
-            batch_size = np.prod(shape[:-1])
-            A_reshaped = self.A.reshape(batch_size, C)
-            dLdA_reshaped = dLdA.reshape(batch_size, C)
-        else:
-            A_reshaped = self.A
-            dLdA_reshaped = dLdA
+            self.A = np.moveaxis(self.A, source=self.dim, destination=-1).reshape(-1, C)
+            dLdA = np.moveaxis(dLdA, source=self.dim, destination=-1).reshape(-1, C)
 
-        
-        # make jacobian
-        A = A_reshaped[:, :, None] 
-        AT = A_reshaped[:, None, :]
-        I = np.eye(C)[None, :, :]
-
-        dAdZ = A * I - A @ AT
-
-
-        dLdZ = np.einsum("bij,bi->bj", dAdZ, dLdA_reshaped) # faster hing, same s doing the for loop
+        dLdZ = self.A * (dLdA - np.sum(dLdA * self.A, axis=1, keepdims=True))
 
         # Reshape back to original dimensions if necessary
         if len(shape) > 2:
             # Restore shapes to original
-            #self.A = NotImplementedError
+            self.A = self.A.reshape(shape)
             dLdZ = dLdZ.reshape(shape)
 
         return dLdZ
  
+
+    

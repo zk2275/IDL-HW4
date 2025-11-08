@@ -12,7 +12,7 @@ class ScaledDotProductAttention:
         # Initialize your softmax layer
         # What dimension should you pass to the softmax constructor?
         self.eps = 1e10 # DO NOT MODIFY
-        self.softmax = Softmax()
+        self.softmax = Softmax(dim=-1)
         
     
     def forward(self, Q, K, V, mask=None):
@@ -24,23 +24,19 @@ class ScaledDotProductAttention:
         :return: Output matrix of shape (N, ..., H, L, Ev)
         """
         # TODO: Implement forward pass
-
-        self.Q = Q # save these
-        self.K = K
-        self.V = V
-
-        d_k = Q.shape[-1]
-
-        KT = np.swapaxes(K, -2, -1)
-        scaled_dot_product = Q @ KT / np.sqrt(d_k)
+        self.Q, self.K, self.V = Q, K, V
+        
         # Calculate attention scores: (N, ..., H, L, S)
         # (N, ..., H, L, E) @ (N, ..., H, E, S) -> (N, ..., H, L, S)
-        
+        K_T = np.moveaxis(K, source=-2, destination=-1)
+        self.dim = K.shape[-1]
+
+        scaled_dot_product = Q @ K_T / np.sqrt(self.dim)
         
         # Apply mask before softmax if provided
         # If mask is not None, add -self.eps to the attention scores for positions to ignore
         if mask is not None:
-            scaled_dot_product = np.where(mask, scaled_dot_product - self.eps, scaled_dot_product)
+            scaled_dot_product -= mask * self.eps
 
         # Compute attention scores: Apply softmax along S dimension (N, ..., H, L, S)
         self.attention_scores = self.softmax.forward(scaled_dot_product)
@@ -58,29 +54,32 @@ class ScaledDotProductAttention:
         :return: Gradient of loss wrt input Q, K, V
         """
         # TODO: Implement backward pass
-        d_k = self.Q.shape[-1]
+
+        attention_scores_T = np.moveaxis(self.attention_scores, -2, -1)
 
         # Calculate gradients for V: (N, ..., H, S, Ev)
         # (N, ..., H, L, S) @ (N, ..., H, S, Ev) -> (N, ..., H, L, Ev) 
         # Use the transpose of stored softmax output to swap last two dimensions   
-        attention_T = np.swapaxes(self.attention_scores, -2, -1)
-        d_V = attention_T @ d_output  
+        d_V = attention_scores_T @ d_output
         
         # Calculate gradients for attention scores
         # (N, ..., H, L, Ev) @ (N, ..., H, Ev, S) -> (N, ..., H, L, S)
-        VT = np.swapaxes(self.V, -2, -1)
-        d_attention_scores = d_output @ VT
-        d_scaled_dot_product = self.softmax.backward(d_attention_scores) 
+        V_T = np.moveaxis(self.V, -2, -1)
+
+        d_attention_scores = d_output @ V_T
+        d_scaled_dot_product = self.softmax.backward(d_attention_scores)
         
         # Scale gradients by sqrt(d_k)
-        d_scaled_dot_product = d_scaled_dot_product / np.sqrt(d_k)
+        d_scaled_dot_product = d_scaled_dot_product / np.sqrt(self.dim)
         
         # Calculate gradients for Q and K
         # (N, ..., H, L, S) @ (N, ..., H, S, E) -> (N, ..., H, L, E)   
-        d_Q = d_scaled_dot_product @ self.K 
+        d_Q = d_scaled_dot_product @ self.K
         # (N, ..., H, L, S) @ (N, ..., H, L, E) -> (N, ..., H, S, E)
-        d_scaled_dot_product_T = np.swapaxes(d_scaled_dot_product, -2, -1)
-        d_K = d_scaled_dot_product_T @ self.Q 
+        d_scaled_dot_product_T = np.moveaxis(d_scaled_dot_product, -2, -1)
+
+        d_K = d_scaled_dot_product_T @ self.Q
         
         # Return gradients for Q, K, V
         return d_Q, d_K, d_V
+

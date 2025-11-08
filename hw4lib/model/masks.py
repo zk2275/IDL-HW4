@@ -27,13 +27,14 @@ def PadMask(padded_input, input_lengths):
     """
     # TODO: Implement PadMask
 
-    N, T = padded_input.shape[:2]
+    batch_size, seq_len = padded_input.size(0), padded_input.size(1)
+    
+    row = torch.arange(seq_len, device=padded_input.device).unsqueeze(0)  # shape: (1, T)
+    input_lengths = input_lengths.unsqueeze(1)  # shape: (N, 1)
 
-    idx_list = torch.arange(T, device = padded_input.device).expand(N,T)
-
-    mask = idx_list >= input_lengths.unsqueeze(1)
-
+    mask = row >= input_lengths  # shape: (N, T)
     return mask
+
 
 ''' 
 TODO: Implement this function.
@@ -58,10 +59,12 @@ def CausalMask(padded_input):
             - non-causal positions (don't attend to) are marked with True 
             - causal positions (can attend to) are marked with False.
     """
-    # TODO: Implement CausalMask
 
-    T = padded_input.shape[1]
-    mask = torch.triu(torch.ones((T, T), dtype=torch.bool, device=padded_input.device), diagonal=1)
+    seq_length = padded_input.shape[1]
 
-    
-    return mask # Remove once implemented
+    device = padded_input.device
+
+    causal_mask = torch.triu(torch.ones((seq_length, seq_length), device=device), diagonal=1).bool()
+
+    return causal_mask
+

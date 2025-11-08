@@ -118,19 +118,22 @@ class DecoderOnlyTransformer(nn.Module):
         self.num_layers      = num_layers
         
         # TODO: Create a ModuleList of decoder layers based on the number of layers
-        self.dec_layers     = nn.ModuleList([SelfAttentionDecoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)]) # ModuleList of decoder layers
+        self.dec_layers     = nn.ModuleList([
+            SelfAttentionDecoderLayer(d_model, num_heads, d_ff, dropout) for _ in range(num_layers)
+        ])
 
         # TODO: Create target embedding and other layers
-        self.target_embedding       = nn.Embedding(num_classes, d_model)  # Target embedding
+        self.target_embedding       = nn.Embedding(num_embeddings=self.num_classes, embedding_dim=d_model) # Target embedding
         self.positional_encoding    = PositionalEncoding(d_model, max_len) # Positional encoding
         self.final_linear           = nn.Linear(d_model, num_classes) # Final linear layer
-        self.dropout                = nn.Dropout(dropout)  # Dropout
-        self.norm                   = nn.LayerNorm(d_model)  # Layer norm
+        self.dropout                = nn.Dropout(dropout) # Dropout layer
+        self.norm                   = nn.LayerNorm(d_model) # Layer normalization
 
         # Weight tying (extra form of regularization, read more about it)
         if weight_tying:
             self.target_embedding.weight = self.final_linear.weight
 
+        #raise NotImplementedError # Remove once implemented
 
     def forward(self, padded_targets: torch.Tensor, target_lengths: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, dict]:
         '''
@@ -151,7 +154,7 @@ class DecoderOnlyTransformer(nn.Module):
         # TODO: Create padding mask for padded_targets on the same device as the input (use PadMask)
         pad_mask_dec = None
         if target_lengths is not None:
-            pad_mask_dec = PadMask(padded_targets, target_lengths)
+            pad_mask_dec = PadMask(padded_input=padded_targets, input_lengths=target_lengths)
         
         # TODO: Create causal mask to prevent attending to future tokens on the same device as the input (use CausalMask)
         causal_mask = CausalMask(padded_targets)
@@ -171,7 +174,7 @@ class DecoderOnlyTransformer(nn.Module):
                 continue
             
             # TODO: Pass through decoder layer
-            x, attention = self.dec_layers[i](x, key_padding_mask=pad_mask_dec, attn_mask=causal_mask)
+            x, attention = self.dec_layers[i](x, pad_mask_dec, causal_mask)
             
             # TODO: Save attention weights  
             runnint_att['layer{}_dec_self'.format(i + 1)] = attention
@@ -270,25 +273,29 @@ class EncoderDecoderTransformer(nn.Module):
         # TODO: Create encoder layers
         # Use ModuleList to create a list of encoder layers
         self.enc_layers = nn.ModuleList([
-            SelfAttentionEncoderLayer(d_model, num_encoder_heads, d_ff_encoder, dropout)
-            for _ in range(num_encoder_layers)
-        ]) # ModuleList of encoder layers
+            SelfAttentionEncoderLayer(d_model, num_encoder_heads, d_ff_encoder, dropout) for _ in range(num_encoder_layers)
+        ])
 
         # TODO: Create decoder layers
         # Use ModuleList to create a list of decoder layers
         self.dec_layers = nn.ModuleList([
-            CrossAttentionDecoderLayer(d_model, num_decoder_heads, d_ff_decoder, dropout)
-            for _ in range(num_decoder_layers)
-        ]) # ModuleList of decoder layers
+            CrossAttentionDecoderLayer(d_model, num_decoder_heads, d_ff_decoder, dropout) for _ in range(num_decoder_layers)
+        ])
 
         # TODO: Create source and target embeddings and other layers
         # Use SpeechEmbedding class to create the source embedding
-        self.source_embedding = SpeechEmbedding(input_dim, d_model,time_reduction, reduction_method, dropout) # Speech embedding
+        self.source_embedding = SpeechEmbedding(
+            input_dim=input_dim,
+            output_dim=d_model,
+            time_reduction=time_reduction,
+            reduction_method=reduction_method,
+            dropout=dropout,
+        )
 
 
         # TODO: Create the target embedding
         # Use nn.Embedding class to create the target embedding
-        self.target_embedding    = nn.Embedding(num_classes, d_model) # Target embedding
+        self.target_embedding    = nn.Embedding(num_embeddings=self.num_classes, embedding_dim=d_model) # Target embedding
 
         # TODO: Create the positional encoding layer
         self.positional_encoding = PositionalEncoding(d_model, max_len) # Positional encoding
@@ -297,7 +304,7 @@ class EncoderDecoderTransformer(nn.Module):
         self.final_linear        = nn.Linear(d_model, num_classes) # Final linear layer
 
         # TODO: Create the dropout layer
-        self.dropout             = nn.Dropout(dropout) # Dropout
+        self.dropout             = nn.Dropout(dropout) # Dropout layer
 
         # TODO: Create the encoder normalization layer
         self.encoder_norm        = nn.LayerNorm(d_model) # Encoder normalization
@@ -310,14 +317,16 @@ class EncoderDecoderTransformer(nn.Module):
         # CTC head should project the final encoder output from the d_model space to the num_classes space
         # To be compatible with CTCLoss, a log_softmax to the output (See. nn.LogSoftmax)
         self.ctc_head            = nn.Sequential(
-            nn.Linear(d_model, num_classes),
-            nn.LogSoftmax(dim=-1) )# CTC head
+            nn.Linear(d_model, num_classes), # Linear layer
+            nn.LogSoftmax(dim=-1) # Log softmax layer
+        )
 
 
         # Weight tying if enabled (extra form of regularization, read more about it)
         if weight_tying:
             self.target_embedding.weight = self.final_linear.weight
 
+        # raise NotImplementedError # Remove once implemented
 
     def encode(self, padded_sources: torch.Tensor, source_lengths: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, dict]:
         '''
@@ -349,7 +358,7 @@ class EncoderDecoderTransformer(nn.Module):
         x_enc = self.dropout(x_enc)
 
         # TODO: Create source padding mask on the same device as the input
-        pad_mask_src = PadMask(x_enc, x_enc_lengths)
+        pad_mask_src = PadMask(padded_input=x_enc, input_lengths=x_enc_lengths)
 
         # TODO: Pass through encoder layers and save attention weights
         running_att = {}
@@ -366,11 +375,11 @@ class EncoderDecoderTransformer(nn.Module):
         # TODO: Apply normalization
         x_enc = self.encoder_norm(x_enc)
         # TODO: Project to CTC logits
-        ctc_logits = self.ctc_head(x_enc).transpose(0, 1)
+        ctc_logits = self.ctc_head(x_enc)
 
         # TODO: Return the encoded representation, padding mask, running attention weights, and CTC inputs (see docstring)
         return x_enc, pad_mask_src, running_att, {
-            'log_probs': ctc_logits,
+            'log_probs': ctc_logits.permute(1, 0, 2), # shape: (src_len, batch_size, num_classes)
             'lengths': x_enc_lengths
         }
 
@@ -397,7 +406,7 @@ class EncoderDecoderTransformer(nn.Module):
         # TODO: Create target padding mask on the same device as the input
         pad_mask_tgt = None
         if target_lengths is not None:
-            pad_mask_tgt = PadMask(padded_targets, target_lengths)
+            pad_mask_tgt = PadMask(padded_input=padded_targets, input_lengths=target_lengths)
 
         if pad_mask_tgt is None and self.training:
             warnings.warn("pad_mask_tgt is None, unless you are using the decoder as a standalone model or doing inference, you should provide target_lengths")
@@ -423,14 +432,9 @@ class EncoderDecoderTransformer(nn.Module):
                 continue
             # TODO: Pass through decoder layer
             x_dec, self_attn, cross_attn = self.dec_layers[i](
-                x_dec,
-                encoder_output,
-                pad_mask_tgt,
-                pad_mask_src, 
-                causal_mask
+                x_dec, encoder_output, pad_mask_tgt, pad_mask_src, causal_mask
             )
-
-
+            
             # TODO: Save attention weights
             running_att[f'layer{i+1}_dec_self'] = self_attn
             running_att[f'layer{i+1}_dec_cross'] = cross_attn
@@ -441,10 +445,8 @@ class EncoderDecoderTransformer(nn.Module):
         # TODO: Final projection
         seq_out = self.final_linear(x_dec)
 
-
         # TODO: Return the output sequence and running attention weights
         return seq_out, running_att
-
 
     def forward(
         self,
@@ -482,7 +484,9 @@ class EncoderDecoderTransformer(nn.Module):
         encoder_output, pad_mask_src, enc_running_att, ctc_inputs = self.encode(padded_sources, source_lengths)
         
         # TODO: Decode using encoder output
-        seq_out, dec_running_att = self.decode(padded_targets, encoder_output, target_lengths, pad_mask_src)
+        seq_out, dec_running_att = self.decode(
+            padded_targets, encoder_output, target_lengths=target_lengths, pad_mask_src=pad_mask_src
+        )
         
         # Combine attention dictionaries
         running_att = {**enc_running_att, **dec_running_att}
@@ -515,6 +519,7 @@ class EncoderDecoderTransformer(nn.Module):
         cls,
         decoder_checkpoint_path: str,
         config: dict,
+        freeze: bool = False,
     ) -> Tuple['EncoderDecoderTransformer', dict]:
         """
         Helper function to initialize an encoder-decoder transformer with decoder weights initialized from a pretrained decoder-only model.
@@ -543,7 +548,7 @@ class EncoderDecoderTransformer(nn.Module):
         transferred_params = []
         new_params = []
         
-        def transfer_module_weights(target_module, prefix):
+        def transfer_module_weights(target_module, prefix, freeze=freeze):
             module_state_dict = {
                 k.replace(prefix, ''): v 
                 for k, v in decoder_state_dict.items()
@@ -555,6 +560,11 @@ class EncoderDecoderTransformer(nn.Module):
             # Store the full parameter names with their prefix
             for name, param in target_module.named_parameters():
                 transferred_params.append((f"{prefix}{name}", param))
+
+                # If freeze is True, set requires_grad to False to freeze the parameters
+                if freeze:
+                    param.requires_grad = False
+                    print(f"  - Freezing {prefix}{name}")
 
         # Transfer shared components
         print("\nTransferring shared components:")

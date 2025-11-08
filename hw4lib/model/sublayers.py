@@ -67,16 +67,18 @@ class SelfAttentionLayer(nn.Module):
         # TODO: Implement forward: Follow the figure in the writeup
         residual = x
         x = self.norm(x)
+        
         # TODO: Self-attention
         # Be sure to use the correct arguments for the multi-head attention layer
         # Set need_weights to True and average_attn_weights to True so we can get the attention weights 
-        x, mha_attn_weights = self.mha(x, x, x, key_padding_mask=key_padding_mask, attn_mask=attn_mask)
+        x, mha_attn_weights = self.mha(x, x, x, key_padding_mask=key_padding_mask, attn_mask=attn_mask, need_weights=True)
         
         # NOTE: For some regularization you can apply dropout and then add residual connection
-        x = self.dropout(x) + residual
+        x = self.dropout(x)
+        x = x + residual
         
         # TODO: Return the output tensor and attention weights
-        return x, mha_attn_weights # Remove once implemented
+        return x, mha_attn_weights
     
 ## -------------------------------------------------------------------------------------------------  
 class CrossAttentionLayer(nn.Module):
@@ -114,7 +116,6 @@ class CrossAttentionLayer(nn.Module):
         
         # TODO: Initialize the dropout layer
         self.dropout = nn.Dropout(dropout)
-
         
 
     def forward(self, x: torch.Tensor, y: torch.Tensor, key_padding_mask: Optional[torch.Tensor] = None, attn_mask: Optional[torch.Tensor] = None) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -133,15 +134,19 @@ class CrossAttentionLayer(nn.Module):
         # TODO: Implement forward: Follow the figure in the writeup
         residual = x
         x = self.norm(x)
+
         # TODO: Cross-attention
         # Be sure to use the correct arguments for the multi-head attention layer
         # Set need_weights to True and average_attn_weights to True so we can get the attention weights 
-        x, mha_attn_weights = self.mha(x, y, y, key_padding_mask=key_padding_mask, attn_mask=attn_mask)
+        x, mha_attn_weights = self.mha(x, y, y, key_padding_mask=key_padding_mask, attn_mask=attn_mask, need_weights=True)
         
         # NOTE: For some regularization you can apply dropout and then add residual connection
-        x = self.dropout(x) + residual
+        x = self.dropout(x)
+        x = x + residual
+        
         # TODO: Return the output tensor and attention weights
-        return x, mha_attn_weights    
+        return x, mha_attn_weights
+    
 ## -------------------------------------------------------------------------------------------------  
 class FeedForwardLayer(nn.Module):
     '''
@@ -189,8 +194,6 @@ class FeedForwardLayer(nn.Module):
         # TODO: Initialize the dropout layer
         self.dropout = nn.Dropout(dropout)
 
-
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         '''
         Forward pass for the FeedForwardLayer.
@@ -203,11 +206,11 @@ class FeedForwardLayer(nn.Module):
         # TODO: Implement forward: Follow the figure in the writeup
         residual = x
         x = self.norm(x)
-        # NOTE: For some regularization you can apply dropout to the output of the feed-forward network before adding the residual connection
-        
-        x = self.ffn(x)
 
-        x = self.dropout(x) + residual
+        x = self.ffn(x)
+        x = self.dropout(x)
+        x = x + residual
         
         # TODO: Return the output tensor
-        return x # Remove once implemented
+        return x
+    
