@@ -149,6 +149,7 @@ class BaseTrainer(ABC):
                     dtypes=dtypes
                 )
                 # Write the summary string to file
+                # change118
                 f.write(str(model_summary))
             elif isinstance(self.model, EncoderDecoderTransformer):
                 batch_size = self.config['data'].get('batch_size', 8)
